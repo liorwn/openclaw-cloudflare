@@ -1,0 +1,51 @@
+===
+start moltworker server
+===
+./start-server -v
+---
+{{ s }}
+---
+where
+* strip(s) endswith "ready"
+
+===
+start playwright browser
+===
+./start-browser
+---
+{{ output }}
+---
+where
+* strip(output) endswith "ready"
+
+===
+start video recording
+===
+./pw --session=moltworker-e2e video-start
+---
+{{ output }}
+---
+where
+* output contains "Video recording started"
+
+===
+navigate to main page and wait for worker to be ready
+%require
+===
+TOKEN=$(cat "$CCTR_FIXTURE_DIR/gateway-token.txt")
+WORKER_URL=$(cat "$CCTR_FIXTURE_DIR/worker-url.txt")
+# Use page.goto() instead of 'open' — 'open' creates a new browser process,
+# which loses the CF-Access headers set via setExtraHTTPHeaders in start-browser.
+./pw --session=moltworker-e2e run-code "async page => {
+  await page.goto('$WORKER_URL/?token=$TOKEN');
+}"
+# Wait for pairing required message (worker shows loading screen first, then UI loads)
+./pw --session=moltworker-e2e run-code "async page => {
+  await page.waitForSelector('text=Pairing required', { timeout: 480000 });
+}"
+echo "Worker is ready"
+---
+{{ output }}
+---
+where
+* output contains "Worker is ready"

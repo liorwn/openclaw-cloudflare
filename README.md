@@ -10,28 +10,27 @@ This template exists to save you from all of that. It packages the same battle-t
 
 > **Experimental:** This is a community template, not an official Cloudflare project. OpenClaw in Cloudflare Sandbox is still experimental and may break without notice. Use at your own risk.
 
-[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/openclaw/openclaw-cloudflare)
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/liorwn/openclaw-cloudflare)
 
 ## Quick Start with Setup Script
 
 The fastest way to get started. The setup script walks you through everything interactively:
 
 ```bash
-git clone https://github.com/openclaw/openclaw-cloudflare.git
+git clone https://github.com/liorwn/openclaw-cloudflare.git
 cd openclaw-cloudflare
 bash setup.sh
 ```
 
 The script will:
 - Check prerequisites (Node.js >= 22, npm, openssl)
-- Authenticate with Cloudflare
+- Authenticate with Cloudflare (with multi-account selection if needed)
 - Name your bot and create an R2 bucket
 - Configure your AI provider (Anthropic, OpenAI, or AI Gateway)
 - Auto-generate security tokens (gateway token + CDP secret)
+- Set up Cloudflare Access (required for the bot to function)
 - Optionally set up Telegram, Discord, or Slack
 - Install dependencies and deploy
-
-After setup, follow the printed instructions to configure Cloudflare Access and pair your device.
 
 ## Requirements
 
@@ -85,9 +84,11 @@ If you prefer to set things up manually:
 
 > **Multiple Cloudflare accounts?** If you have more than one Cloudflare account, add `account_id` to `wrangler.jsonc` (top level) so wrangler knows which account to use. You can find your Account ID in the Cloudflare dashboard.
 
-### 1. Install and deploy
+### 1. Clone and deploy
 
 ```bash
+git clone https://github.com/liorwn/openclaw-cloudflare.git
+cd openclaw-cloudflare
 npm install
 npm run deploy
 ```
@@ -105,10 +106,8 @@ npx wrangler secret put ANTHROPIC_API_KEY
 # npx wrangler secret put CF_AI_GATEWAY_ACCOUNT_ID
 # npx wrangler secret put CF_AI_GATEWAY_GATEWAY_ID
 
-# Generate and set a gateway token (required for remote access)
-# Save this token - you'll need it to access the Control UI
+# Generate and set a gateway token (required — auto-injected by the worker)
 export MOLTBOT_GATEWAY_TOKEN=$(openssl rand -hex 32)
-echo "Your gateway token: $MOLTBOT_GATEWAY_TOKEN"
 echo "$MOLTBOT_GATEWAY_TOKEN" | npx wrangler secret put MOLTBOT_GATEWAY_TOKEN
 ```
 
@@ -140,19 +139,17 @@ npx wrangler secret put CF_ACCESS_AUD
 npm run deploy
 ```
 
-After deploying, open the Control UI with your token:
+After deploying, visit your worker URL:
 
 ```
-https://my-openclaw-bot.your-subdomain.workers.dev/?token=YOUR_GATEWAY_TOKEN
+https://my-openclaw-bot.your-subdomain.workers.dev/
 ```
 
-Replace `my-openclaw-bot` with your actual worker name and `YOUR_GATEWAY_TOKEN` with the token you generated above.
+You'll be prompted to authenticate via Cloudflare Access. Once authenticated, the gateway token is injected automatically — no need to pass `?token=` manually.
+
+Replace `my-openclaw-bot` with your actual worker name.
 
 **Note:** The first request may take 1-2 minutes while the container starts.
-
-### 5. Pair your device
-
-Visit the admin UI at `/_admin/` — you'll be prompted to authenticate via Cloudflare Access. Then [pair your device](#device-pairing).
 
 You'll also likely want to [enable R2 storage](#persistent-storage-r2) so your paired devices and conversation history persist across container restarts (optional but recommended).
 
@@ -246,29 +243,31 @@ The `/cdp` endpoint is still protected by the `CDP_SECRET` query parameter, so u
 
 ## Authentication
 
-By default, OpenClaw uses **device pairing** for authentication. When a new device (browser, CLI, etc.) connects, it must be approved via the admin UI at `/_admin/`.
+### How It Works
 
-### Device Pairing
+This deployment uses two authentication layers:
 
-1. A device connects to the gateway
+1. **Cloudflare Access** — Protects all routes. Users must authenticate (email OTP, Google, GitHub, etc.) before reaching the worker.
+2. **Gateway Token** — A shared secret between the worker and the container. The worker injects the token into requests automatically after CF Access auth succeeds, so you never need to pass `?token=` manually.
+
+For the **web UI (Control UI)**, device pairing is bypassed — Cloudflare Access is the security boundary. Once you pass CF Access auth, you're in.
+
+### Device Pairing (Chat Channels)
+
+Device pairing applies to **chat channel DMs** (Telegram, Discord, Slack), not the web UI:
+
+1. A device sends a DM to the bot
 2. The connection is held pending until approved
 3. An admin approves the device via `/_admin/`
-4. The device is now paired and can connect freely
+4. The device is now paired and can DM freely
 
-This is the most secure option as it requires explicit approval for each device.
+This prevents unauthorized users from chatting with your bot via public channels.
 
-### Gateway Token (Required)
+### Gateway Token
 
-A gateway token is required to access the Control UI when hosted remotely. Pass it as a query parameter:
+The gateway token (`MOLTBOT_GATEWAY_TOKEN`) is auto-generated by `setup.sh` and stored as a wrangler secret. The worker injects it into all proxied requests server-side — you don't need to manage or pass it manually.
 
-```
-https://my-openclaw-bot.your-subdomain.workers.dev/?token=YOUR_TOKEN
-wss://my-openclaw-bot.your-subdomain.workers.dev/ws?token=YOUR_TOKEN
-```
-
-**Note:** Even with a valid token, new devices still require approval via the admin UI at `/_admin/` (see Device Pairing above).
-
-For local development only, set `DEV_MODE=true` in `.dev.vars` to skip Cloudflare Access authentication and enable `allowInsecureAuth` (bypasses device pairing entirely).
+For local development only, set `DEV_MODE=true` in `.dev.vars` to skip Cloudflare Access authentication entirely.
 
 ## Persistent Storage (R2)
 
@@ -543,7 +542,7 @@ The previous `AI_GATEWAY_API_KEY` + `AI_GATEWAY_BASE_URL` approach is still supp
 | `AI_GATEWAY_BASE_URL` | No | Legacy AI Gateway endpoint URL (deprecated) |
 | `CF_ACCESS_TEAM_DOMAIN` | Yes* | Cloudflare Access team domain (required for admin UI) |
 | `CF_ACCESS_AUD` | Yes* | Cloudflare Access application audience (required for admin UI) |
-| `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (pass via `?token=` query param) |
+| `MOLTBOT_GATEWAY_TOKEN` | Yes | Gateway token for authentication (auto-injected by worker after CF Access auth) |
 | `DEV_MODE` | No | Set to `true` to skip CF Access auth + device pairing (local dev only) |
 | `DEBUG_ROUTES` | No | Set to `true` to enable `/debug/*` routes |
 | `SANDBOX_SLEEP_AFTER` | No | Container sleep timeout: `never` (default) or duration like `10m`, `1h` |
@@ -566,11 +565,11 @@ The previous `AI_GATEWAY_API_KEY` + `AI_GATEWAY_BASE_URL` approach is still supp
 
 OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 
-1. **Cloudflare Access** - Protects admin routes (`/_admin/`, `/api/*`, `/debug/*`). Only authenticated users can manage devices.
+1. **Cloudflare Access** — Protects all routes. Only authenticated users can access the Control UI, admin UI, and API endpoints.
 
-2. **Gateway Token** - Required to access the Control UI. Pass via `?token=` query parameter. Keep this secret.
+2. **Gateway Token** — Shared secret between the worker and the container, injected automatically into proxied requests. Users never need to handle this directly.
 
-3. **Device Pairing** - Each device (browser, CLI, chat platform DM) must be explicitly approved via the admin UI before it can interact with the assistant. This is the default "pairing" DM policy.
+3. **Device Pairing** — Applies to chat channel DMs (Telegram, Discord, Slack). Each device must be explicitly approved via the admin UI before it can DM the bot. The web UI bypasses pairing since Cloudflare Access provides the authentication layer.
 
 ## Troubleshooting
 

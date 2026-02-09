@@ -369,29 +369,67 @@ fi
 echo ""
 
 # ============================================================
-# Step 10: Optional R2 persistent storage credentials
+# Step 10: R2 persistent storage credentials (Recommended)
 # ============================================================
-print_header "R2 Persistent Storage (Optional)"
+print_header "R2 Persistent Storage (Recommended)"
 
-echo "R2 persistent storage lets your bot's data survive container restarts."
+echo "R2 persistent storage lets your bot's data (paired devices, conversations,"
+echo "memory) survive container restarts. Without it, everything is lost on restart."
+echo ""
 echo "You need an R2 API token with Object Read & Write permissions."
 echo ""
-read -rp "Set up R2 persistence now? [y/N]: " SETUP_R2
+read -rp "Set up R2 persistence now? [Y/n]: " SETUP_R2
 
-if [[ "$SETUP_R2" =~ ^[Yy]$ ]]; then
-    echo "Enter your R2 Access Key ID:"
-    read -rsp "> " R2_KEY
+if [[ ! "$SETUP_R2" =~ ^[Nn]$ ]]; then
+    # Auto-fill account ID if we detected it earlier
+    if [ -n "$CLOUDFLARE_ACCOUNT_ID" ]; then
+        echo "$CLOUDFLARE_ACCOUNT_ID" | npx wrangler secret put CF_ACCOUNT_ID
+        print_step "Account ID set from earlier detection"
+    else
+        echo "Enter your Cloudflare Account ID:"
+        read -rp "> " CF_ACCT_ID
+        echo "$CF_ACCT_ID" | npx wrangler secret put CF_ACCOUNT_ID
+        CLOUDFLARE_ACCOUNT_ID="$CF_ACCT_ID"
+    fi
+
     echo ""
-    echo "$R2_KEY" | npx wrangler secret put R2_ACCESS_KEY_ID
+    echo "Now you need to create an R2 API token in the Cloudflare dashboard."
+    echo ""
+    echo "  1. A browser window will open to the R2 API Tokens page"
+    echo "  2. Click 'Create API Token'"
+    echo "  3. Set permissions to 'Object Read & Write'"
+    echo "  4. Select the '${BUCKET_NAME}' bucket (or 'Apply to all buckets')"
+    echo "  5. Click 'Create API Token'"
+    echo "  6. Copy the Access Key ID and Secret Access Key"
+    echo ""
+    read -rp "Press Enter to open the R2 API Tokens page in your browser..."
 
+    # Open the R2 API tokens page
+    R2_TOKEN_URL="https://dash.cloudflare.com/${CLOUDFLARE_ACCOUNT_ID}/r2/api-tokens"
+    if command -v open &> /dev/null; then
+        open "$R2_TOKEN_URL"
+    elif command -v xdg-open &> /dev/null; then
+        xdg-open "$R2_TOKEN_URL"
+    else
+        echo "Open this URL in your browser: $R2_TOKEN_URL"
+    fi
+
+    echo ""
+    echo "Enter your R2 Access Key ID:"
+    read -rp "> " R2_KEY
+    if [ -n "$R2_KEY" ]; then
+        echo "$R2_KEY" | npx wrangler secret put R2_ACCESS_KEY_ID
+        print_step "R2 Access Key ID set"
+    fi
+
+    echo ""
     echo "Enter your R2 Secret Access Key:"
     read -rsp "> " R2_SECRET
     echo ""
-    echo "$R2_SECRET" | npx wrangler secret put R2_SECRET_ACCESS_KEY
-
-    echo "Enter your Cloudflare Account ID:"
-    read -rp "> " CF_ACCT_ID
-    echo "$CF_ACCT_ID" | npx wrangler secret put CF_ACCOUNT_ID
+    if [ -n "$R2_SECRET" ]; then
+        echo "$R2_SECRET" | npx wrangler secret put R2_SECRET_ACCESS_KEY
+        print_step "R2 Secret Access Key set"
+    fi
 
     print_step "R2 persistent storage configured"
 else

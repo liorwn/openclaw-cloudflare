@@ -275,11 +275,12 @@ By default, OpenClaw data (configs, paired devices, conversation history) is los
 
 ### 1. Create R2 API Token
 
-1. Go to **R2** > **Overview** in the [Cloudflare Dashboard](https://dash.cloudflare.com/)
-2. Click **Manage R2 API Tokens**
-3. Create a new token with **Object Read & Write** permissions
-4. Select your bot's data bucket (created automatically by `setup.sh` or on first deploy)
-5. Copy the **Access Key ID** and **Secret Access Key**
+1. Go to the [R2 API Tokens page](https://dash.cloudflare.com/?to=/:account/r2/api-tokens) in the Cloudflare Dashboard
+2. Click **Create API Token**
+3. Set permissions to **Object Read & Write**
+4. Select your bot's data bucket (e.g., `my-openclaw-data`), or **Apply to all buckets**
+5. Click **Create API Token**
+6. Copy the **Access Key ID** and **Secret Access Key**
 
 ### 2. Set Secrets
 

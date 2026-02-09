@@ -83,10 +83,20 @@ This project packages OpenClaw to run in a [Cloudflare Sandbox](https://develope
 
 If you prefer to set things up manually:
 
-```bash
-# Install dependencies
-npm install
+> **Multiple Cloudflare accounts?** If you have more than one Cloudflare account, add `account_id` to `wrangler.jsonc` (top level) so wrangler knows which account to use. You can find your Account ID in the Cloudflare dashboard.
 
+### 1. Install and deploy
+
+```bash
+npm install
+npm run deploy
+```
+
+> **Note:** The first deploy may timeout while pushing the container image. Just retry `npm run deploy` — the image is cached after the first push.
+
+### 2. Set secrets
+
+```bash
 # Set your API key (direct Anthropic access)
 npx wrangler secret put ANTHROPIC_API_KEY
 
@@ -100,8 +110,33 @@ npx wrangler secret put ANTHROPIC_API_KEY
 export MOLTBOT_GATEWAY_TOKEN=$(openssl rand -hex 32)
 echo "Your gateway token: $MOLTBOT_GATEWAY_TOKEN"
 echo "$MOLTBOT_GATEWAY_TOKEN" | npx wrangler secret put MOLTBOT_GATEWAY_TOKEN
+```
 
-# Deploy
+### 3. Set up Cloudflare Access (required)
+
+> **If you followed `setup.sh`, this is already done.** Skip to step 4.
+
+Cloudflare Access is **required** for the bot to function — without it, admin routes return 503 errors and device pairing won't work.
+
+1. Go to Workers & Pages dashboard → select your worker → Settings
+2. Under Domains & Routes, click `...` on the workers.dev row → **Enable Cloudflare Access**
+3. In Zero Trust → Access → Applications, configure who can access (email allow list, Google, GitHub, etc.)
+4. Copy the **Application Audience (AUD)** tag from the Access application settings
+
+Then set the secrets:
+
+```bash
+# Your Cloudflare Access team domain (e.g., "myteam.cloudflareaccess.com")
+# Find it in Zero Trust dashboard → Settings → Custom Pages
+npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
+
+# The Application Audience (AUD) tag from your Access application
+npx wrangler secret put CF_ACCESS_AUD
+```
+
+### 4. Redeploy
+
+```bash
 npm run deploy
 ```
 
@@ -115,13 +150,15 @@ Replace `my-openclaw-bot` with your actual worker name and `YOUR_GATEWAY_TOKEN` 
 
 **Note:** The first request may take 1-2 minutes while the container starts.
 
-> **Important:** You will not be able to use the Control UI until you complete the following steps. You MUST:
-> 1. [Set up Cloudflare Access](#setting-up-the-admin-ui) to protect the admin UI
-> 2. [Pair your device](#device-pairing) via the admin UI at `/_admin/`
+### 5. Pair your device
+
+Visit the admin UI at `/_admin/` — you'll be prompted to authenticate via Cloudflare Access. Then [pair your device](#device-pairing).
 
 You'll also likely want to [enable R2 storage](#persistent-storage-r2) so your paired devices and conversation history persist across container restarts (optional but recommended).
 
 ## Setting Up the Admin UI
+
+> **Already done?** If you followed `setup.sh` or the manual setup steps above, Cloudflare Access is already configured. The steps below are a detailed reference.
 
 To use the admin UI at `/_admin/` for device management, you need to:
 1. Enable Cloudflare Access on your worker
@@ -536,6 +573,8 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 3. **Device Pairing** - Each device (browser, CLI, chat platform DM) must be explicitly approved via the admin UI before it can interact with the assistant. This is the default "pairing" DM policy.
 
 ## Troubleshooting
+
+**First deploy times out:** The initial container image push can be slow. Retry `npm run deploy` — the image is cached after the first push.
 
 **`npm run dev` fails with an `Unauthorized` error:** You need to enable Cloudflare Containers in the [Containers dashboard](https://dash.cloudflare.com/?to=/:account/workers/containers)
 

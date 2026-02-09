@@ -15,29 +15,12 @@
     "binding": "ASSETS",
     "run_worker_first": true,
   },
-  // Allow importing HTML files as text modules and PNG files as binary
-  "rules": [
-    {
-      "type": "Text",
-      "globs": ["**/*.html"],
-      "fallthrough": false,
-    },
-    {
-      "type": "Data",
-      "globs": ["**/*.png"],
-      "fallthrough": false,
-    },
-  ],
-  // Build command for vite
-  "build": {
-    "command": "npm run build",
-  },
   // Container configuration for the OpenClaw sandbox
   "containers": [
     {
       "class_name": "Sandbox",
       "image": "./Dockerfile",
-      "instance_type": "standard",
+      "instance_type": "standard-1",
       "max_instances": 1,
     },
   ],

@@ -106,6 +106,51 @@ else
     npx wrangler login
 fi
 
+# Check for multiple accounts
+echo ""
+echo "Detecting Cloudflare accounts..."
+WHOAMI_OUTPUT=$(npx wrangler whoami 2>&1)
+
+# Parse account IDs and names from whoami output
+ACCOUNT_IDS=()
+ACCOUNT_NAMES=()
+while IFS= read -r line; do
+    if echo "$line" | grep -qE '│.*│.*│'; then
+        # Extract name and ID from table row (skip header/separator lines)
+        ACCT_NAME=$(echo "$line" | awk -F '│' '{print $2}' | xargs)
+        ACCT_ID=$(echo "$line" | awk -F '│' '{print $3}' | xargs)
+        # Skip empty or header rows
+        if [ -n "$ACCT_ID" ] && [ "$ACCT_ID" != "Account ID" ] && echo "$ACCT_ID" | grep -qE '^[a-f0-9]{32}$'; then
+            ACCOUNT_IDS+=("$ACCT_ID")
+            ACCOUNT_NAMES+=("$ACCT_NAME")
+        fi
+    fi
+done <<< "$WHOAMI_OUTPUT"
+
+if [ "${#ACCOUNT_IDS[@]}" -gt 1 ]; then
+    print_warn "Multiple Cloudflare accounts detected!"
+    echo ""
+    echo "Select the account to deploy to:"
+    for i in "${!ACCOUNT_IDS[@]}"; do
+        echo "  $((i+1))) ${ACCOUNT_NAMES[$i]} (${ACCOUNT_IDS[$i]})"
+    done
+    echo ""
+    read -rp "Enter choice [1-${#ACCOUNT_IDS[@]}]: " ACCT_CHOICE
+    ACCT_INDEX=$((ACCT_CHOICE - 1))
+    if [ "$ACCT_INDEX" -ge 0 ] && [ "$ACCT_INDEX" -lt "${#ACCOUNT_IDS[@]}" ]; then
+        export CLOUDFLARE_ACCOUNT_ID="${ACCOUNT_IDS[$ACCT_INDEX]}"
+        print_step "Using account: ${ACCOUNT_NAMES[$ACCT_INDEX]} (${CLOUDFLARE_ACCOUNT_ID})"
+    else
+        print_error "Invalid choice. Exiting."
+        exit 1
+    fi
+elif [ "${#ACCOUNT_IDS[@]}" -eq 1 ]; then
+    export CLOUDFLARE_ACCOUNT_ID="${ACCOUNT_IDS[0]}"
+    print_step "Using account: ${ACCOUNT_NAMES[0]} (${CLOUDFLARE_ACCOUNT_ID})"
+else
+    print_warn "Could not detect account ID. Wrangler will prompt if needed."
+fi
+
 echo ""
 
 # ============================================================
@@ -223,7 +268,51 @@ print_step "CDP secret generated and set"
 echo ""
 
 # ============================================================
-# Step 7: Worker URL
+# Step 7: Cloudflare Access (Required)
+# ============================================================
+print_header "Cloudflare Access (Required)"
+
+echo "Cloudflare Access protects your admin UI and is required for the bot to function."
+echo ""
+echo "If you haven't set up Cloudflare Access yet, you can skip this step and set"
+echo "it up later — but the bot will return 503 errors until these secrets are configured."
+echo ""
+echo "To find these values:"
+echo "  1. Go to Workers & Pages dashboard → select your worker → Settings"
+echo "  2. Under Domains & Routes, click '...' on the workers.dev row → Enable Cloudflare Access"
+echo "  3. Your team domain is in Zero Trust dashboard → Settings → Custom Pages"
+echo "     (the subdomain before .cloudflareaccess.com)"
+echo "  4. The AUD tag is in Zero Trust → Access → Applications → your worker's app"
+echo ""
+read -rp "Set up Cloudflare Access now? [Y/n]: " SETUP_ACCESS
+
+if [[ ! "$SETUP_ACCESS" =~ ^[Nn]$ ]]; then
+    echo ""
+    echo "Enter your Cloudflare Access team domain (e.g., myteam.cloudflareaccess.com):"
+    read -rp "> " CF_ACCESS_DOMAIN
+    if [ -n "$CF_ACCESS_DOMAIN" ]; then
+        echo "$CF_ACCESS_DOMAIN" | npx wrangler secret put CF_ACCESS_TEAM_DOMAIN
+        print_step "CF Access team domain set"
+    fi
+
+    echo ""
+    echo "Enter your Cloudflare Access Application Audience (AUD) tag:"
+    read -rp "> " CF_ACCESS_AUD_VAL
+    if [ -n "$CF_ACCESS_AUD_VAL" ]; then
+        echo "$CF_ACCESS_AUD_VAL" | npx wrangler secret put CF_ACCESS_AUD
+        print_step "CF Access AUD set"
+    fi
+else
+    print_warn "Skipped. Your bot will return 503 until CF Access secrets are configured."
+    print_warn "Set them later with:"
+    print_warn "  npx wrangler secret put CF_ACCESS_TEAM_DOMAIN"
+    print_warn "  npx wrangler secret put CF_ACCESS_AUD"
+fi
+
+echo ""
+
+# ============================================================
+# Step 8: Worker URL
 # ============================================================
 print_header "Worker URL"
 
@@ -241,7 +330,7 @@ fi
 echo ""
 
 # ============================================================
-# Step 8: Optional chat channels
+# Step 9: Optional chat channels
 # ============================================================
 print_header "Chat Channels (Optional)"
 
@@ -280,7 +369,7 @@ fi
 echo ""
 
 # ============================================================
-# Step 9: Optional R2 persistent storage credentials
+# Step 10: Optional R2 persistent storage credentials
 # ============================================================
 print_header "R2 Persistent Storage (Optional)"
 
@@ -313,7 +402,7 @@ fi
 echo ""
 
 # ============================================================
-# Step 10: Install and deploy
+# Step 11: Install and deploy
 # ============================================================
 print_header "Install & Deploy"
 
@@ -341,7 +430,7 @@ echo "  $GATEWAY_TOKEN"
 echo ""
 echo -e "${YELLOW}IMPORTANT — Next steps:${NC}"
 echo ""
-echo "  1. Set up Cloudflare Access to protect your admin UI:"
+echo "  1. If you skipped Cloudflare Access setup, configure it now (required):"
 echo "     - Go to Workers & Pages dashboard → select '${BOT_NAME}'"
 echo "     - Settings → Domains & Routes → workers.dev → Enable Cloudflare Access"
 echo "     - Then set the Access secrets:"

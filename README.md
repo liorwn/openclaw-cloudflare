@@ -1,10 +1,14 @@
 # OpenClaw on Cloudflare Workers
 
-Run [OpenClaw](https://github.com/openclaw/openclaw) (formerly Moltbot, formerly Clawdbot) personal AI assistant in a [Cloudflare Sandbox](https://developers.cloudflare.com/sandbox/).
+Deploy your own [OpenClaw](https://github.com/openclaw/openclaw) personal AI assistant on [Cloudflare Workers](https://developers.cloudflare.com/sandbox/) — the easy way.
 
 ![openclaw logo](./assets/logo.png)
 
-> **Experimental:** This is a proof of concept demonstrating that OpenClaw can run in Cloudflare Sandbox. It is not officially supported and may break without notice. Use at your own risk.
+This project is based on [Moltworker](https://github.com/cloudflare/moltworker), Cloudflare's official reference implementation for running OpenClaw in a Sandbox container. Moltworker works, but getting it deployed smoothly is another story — between Cloudflare Access configuration, CDP endpoint bypass rules, secret naming conventions, container lifecycle quirks, and R2 storage setup, there are a lot of places where things can quietly break.
+
+This template exists to save you from all of that. It packages the same battle-tested infrastructure into a streamlined experience: an interactive setup script that handles secrets, buckets, and deployment in one pass, sensible defaults that just work, and documentation that covers the gotchas we hit so you don't have to.
+
+> **Experimental:** This is a community template, not an official Cloudflare project. OpenClaw in Cloudflare Sandbox is still experimental and may break without notice. Use at your own risk.
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/openclaw/openclaw-cloudflare)
 

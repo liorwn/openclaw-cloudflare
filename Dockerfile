@@ -25,6 +25,15 @@ RUN npm install -g pnpm
 RUN npm install -g openclaw@2026.2.3 \
     && openclaw --version
 
+# Install gogcli (Google Suite CLI - Gmail, Calendar, Drive, Contacts)
+# Pre-built binary since Go compilation exceeds container memory limits
+RUN curl -sL https://github.com/steipete/gogcli/releases/download/v0.9.0/gogcli_0.9.0_linux_amd64.tar.gz \
+    | tar xz -C /usr/local/bin gog \
+    && gog --version
+
+# Copy gogcli OAuth client secret
+COPY gog-config/client_secret.json /root/.config/gog/client_secret.json
+
 # Create OpenClaw directories
 # Legacy .clawdbot paths are kept for R2 backup migration
 RUN mkdir -p /root/.openclaw \

@@ -20,7 +20,7 @@
     {
       "class_name": "Sandbox",
       "image": "./Dockerfile",
-      "instance_type": "standard-1",
+      "instance_type": "standard-3",
       "max_instances": 1,
     },
   ],
@@ -47,6 +47,7 @@
   ],
   "vars": {
     "R2_BUCKET_NAME": "my-openclaw-data",
+    "DEBUG_ROUTES": "true",
   },
   // Cron trigger to sync openclaw data to R2 every 5 minutes
   "triggers": {

@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { AppEnv } from '../types';
 import { MOLTBOT_PORT } from '../config';
-import { findExistingMoltbotProcess } from '../gateway';
+import { findExistingMoltbotProcess, ensureMoltbotGateway } from '../gateway';
 
 /**
  * Public routes - NO Cloudflare Access authentication required
@@ -54,6 +54,23 @@ publicRoutes.get('/api/status', async (c) => {
       status: 'error',
       error: err instanceof Error ? err.message : 'Unknown error',
     });
+  }
+});
+
+// POST /api/start - Trigger gateway startup (blocking). Called by the loading page
+// so that R2 restore + gateway start run as part of a regular request (not waitUntil)
+// which keeps the sandbox Durable Object connection alive for the full duration.
+publicRoutes.post('/api/start', async (c) => {
+  const sandbox = c.get('sandbox');
+  try {
+    const process = await ensureMoltbotGateway(sandbox, c.env);
+    return c.json({ ok: true, status: 'running', processId: process.id });
+  } catch (err) {
+    console.error('[api/start] Gateway startup failed:', err);
+    return c.json(
+      { ok: false, status: 'error', error: err instanceof Error ? err.message : 'Unknown error' },
+      503,
+    );
   }
 });
 

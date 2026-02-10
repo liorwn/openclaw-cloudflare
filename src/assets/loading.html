@@ -157,6 +157,32 @@
       let pollCount = 0;
       let consecutiveErrors = 0;
       const maxConsecutiveErrors = 5;
+      let startRequestInFlight = false;
+
+      // Trigger a blocking gateway start. This POST keeps the worker request
+      // alive (unlike waitUntil which gets cancelled), so the R2 restore and
+      // gateway startup can complete within the full request time limit.
+      async function triggerStart() {
+        if (startRequestInFlight) return;
+        startRequestInFlight = true;
+        statusEl.textContent = 'Starting gateway (restoring data)...';
+        try {
+          const res = await fetch('/api/start', { method: 'POST' });
+          const data = await res.json();
+          if (data.ok) {
+            titleEl.innerHTML = '<span class="ready">Moltworker is ready!</span>';
+            statusEl.textContent = 'Redirecting...';
+            document.querySelector('.spinner').style.display = 'none';
+            setTimeout(() => { window.location.reload(); }, 500);
+            return;
+          }
+          // Start failed — fall through to let polling retry
+          console.log('Start returned not-ok:', data);
+        } catch (err) {
+          console.log('Start request failed:', err);
+        }
+        startRequestInFlight = false;
+      }
 
       async function checkStatus() {
         pollCount++;
@@ -181,7 +207,13 @@
 
           // Update status message based on state
           if (data.status === 'not_running') {
-            statusEl.textContent = 'Container is starting up...';
+            if (startRequestInFlight) {
+              statusEl.textContent = 'Starting gateway (restoring data)...';
+            } else {
+              statusEl.textContent = 'Container is starting up...';
+              // Trigger the blocking start request
+              triggerStart();
+            }
           } else if (data.status === 'not_responding') {
             statusEl.textContent = 'Container started, waiting for gateway...';
           } else {
@@ -189,7 +221,7 @@
           }
 
           // Continue polling
-          setTimeout(checkStatus, 2000);
+          setTimeout(checkStatus, 3000);
         } catch (err) {
           consecutiveErrors++;
 

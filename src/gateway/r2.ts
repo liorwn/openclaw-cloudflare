@@ -18,7 +18,7 @@ const RESTORE_PREFIXES: Record<string, string> = {
  * for bot identity/config restoration. Skipping them keeps us well under
  * the Cloudflare 1000 subrequest limit per worker invocation.
  */
-const SKIP_EXTENSIONS = ['.jsonl', '.bak'];
+const SKIP_EXTENSIONS = ['.jsonl', '.bak', '.m4a', '.mp3', '.mp4', '.wav', '.ogg', '.webm'];
 
 /**
  * Check if an R2 key should be skipped during restore.
@@ -30,6 +30,8 @@ function shouldSkipKey(key: string): boolean {
   if (SKIP_EXTENSIONS.some((ext) => key.includes(ext))) return true;
   // Corrupted keys from buggy SSE-based sync (contain JSON/SSE fragments)
   if (key.includes('"') || key.includes('{') || key.includes('\\n')) return true;
+  // Temp files from incomplete writes (e.g. main.sqlite.tmp-*)
+  if (key.includes('.tmp-')) return true;
   return false;
 }
 

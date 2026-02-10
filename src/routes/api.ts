@@ -7,6 +7,7 @@ import {
   findExistingMoltbotProcess,
   syncToR2,
 } from '../gateway';
+import { MOLTBOT_PORT } from '../config';
 
 // CLI commands timeout
 const CLI_TIMEOUT_MS = 15000;
@@ -394,6 +395,110 @@ adminApi.post('/gateway/restart', async (c) => {
         : 'No existing process found, starting new instance...',
       previousProcessId: existingProcess?.id,
     });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return c.json({ error: errorMessage }, 500);
+  }
+});
+
+// POST /api/admin/agent/abort - Abort running agent(s) via WebSocket chat.abort
+adminApi.post('/agent/abort', async (c) => {
+  const sandbox = c.get('sandbox');
+
+  try {
+    const existingProcess = await findExistingMoltbotProcess(sandbox);
+    if (!existingProcess) {
+      return c.json({ success: false, error: 'Gateway is not running' }, 400);
+    }
+
+    // Create a WebSocket upgrade request to the gateway
+    const wsRequest = new Request(`http://localhost:${MOLTBOT_PORT}/`, {
+      headers: {
+        Upgrade: 'websocket',
+        Connection: 'Upgrade',
+      },
+    });
+
+    const containerResponse = await sandbox.wsConnect(wsRequest, MOLTBOT_PORT);
+    const ws = containerResponse.webSocket;
+    if (!ws) {
+      return c.json({ success: false, error: 'Failed to open WebSocket to gateway' }, 500);
+    }
+    ws.accept();
+
+    // Exchange messages: connect → wait for ack → send chat.abort → wait for response
+    const abortResult = await new Promise<{ success: boolean; data?: unknown; error?: string }>(
+      (resolve) => {
+        const timeout = setTimeout(() => {
+          try { ws.close(); } catch { /* ignore */ }
+          resolve({ success: false, error: 'Abort timed out after 10s' });
+        }, 10_000);
+
+        let connected = false;
+
+        ws.addEventListener('message', (event) => {
+          try {
+            const msg = JSON.parse(typeof event.data === 'string' ? event.data : '');
+
+            // Wait for connect ack, then send abort
+            if (!connected && msg.type === 'res' && msg.method === 'connect') {
+              connected = true;
+              ws.send(
+                JSON.stringify({
+                  type: 'req',
+                  id: `abort-${Date.now()}`,
+                  method: 'chat.abort',
+                  params: {},
+                }),
+              );
+              return;
+            }
+
+            // Capture abort response
+            if (msg.method === 'chat.abort') {
+              clearTimeout(timeout);
+              try { ws.close(); } catch { /* ignore */ }
+              resolve({ success: true, data: msg });
+              return;
+            }
+          } catch {
+            // Ignore parse errors
+          }
+        });
+
+        ws.addEventListener('error', () => {
+          clearTimeout(timeout);
+          resolve({ success: false, error: 'WebSocket error connecting to gateway' });
+        });
+
+        ws.addEventListener('close', () => {
+          clearTimeout(timeout);
+          if (!connected) {
+            resolve({ success: false, error: 'WebSocket closed before connect' });
+          }
+        });
+
+        // Send connect frame to initiate protocol
+        ws.send(
+          JSON.stringify({
+            type: 'req',
+            id: `connect-${Date.now()}`,
+            method: 'connect',
+            params: { name: 'admin-abort', version: '1.0.0' },
+          }),
+        );
+      },
+    );
+
+    if (abortResult.success) {
+      return c.json({
+        success: true,
+        message: 'Agent abort signal sent successfully',
+        data: abortResult.data,
+      });
+    } else {
+      return c.json({ success: false, error: abortResult.error }, 500);
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     return c.json({ error: errorMessage }, 500);

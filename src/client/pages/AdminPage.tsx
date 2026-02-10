@@ -3,6 +3,7 @@ import {
   listDevices,
   approveDevice,
   approveAllDevices,
+  abortAgent,
   restartGateway,
   getStorageStatus,
   triggerSync,
@@ -53,6 +54,7 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
   const [restartInProgress, setRestartInProgress] = useState(false);
+  const [abortInProgress, setAbortInProgress] = useState(false);
   const [syncInProgress, setSyncInProgress] = useState(false);
 
   const fetchDevices = useCallback(async () => {
@@ -125,6 +127,22 @@ export default function AdminPage() {
       setError(err instanceof Error ? err.message : 'Failed to approve devices');
     } finally {
       setActionInProgress(null);
+    }
+  };
+
+  const handleAbortAgent = async () => {
+    setAbortInProgress(true);
+    try {
+      const result = await abortAgent();
+      if (result.success) {
+        setError(null);
+      } else {
+        setError(result.error || 'Failed to abort agent');
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to abort agent');
+    } finally {
+      setAbortInProgress(false);
     }
   };
 
@@ -232,18 +250,28 @@ export default function AdminPage() {
       <section className="devices-section gateway-section">
         <div className="section-header">
           <h2>Gateway Controls</h2>
-          <button
-            className="btn btn-danger"
-            onClick={handleRestartGateway}
-            disabled={restartInProgress}
-          >
-            {restartInProgress && <ButtonSpinner />}
-            {restartInProgress ? 'Restarting...' : 'Restart Gateway'}
-          </button>
+          <div className="header-actions">
+            <button
+              className="btn btn-warning"
+              onClick={handleAbortAgent}
+              disabled={abortInProgress}
+            >
+              {abortInProgress && <ButtonSpinner />}
+              {abortInProgress ? 'Aborting...' : 'Abort Agent'}
+            </button>
+            <button
+              className="btn btn-danger"
+              onClick={handleRestartGateway}
+              disabled={restartInProgress}
+            >
+              {restartInProgress && <ButtonSpinner />}
+              {restartInProgress ? 'Restarting...' : 'Restart Gateway'}
+            </button>
+          </div>
         </div>
         <p className="hint">
-          Restart the gateway to apply configuration changes or recover from errors. All connected
-          clients will be temporarily disconnected.
+          Abort Agent stops a running agent without restarting. Restart Gateway kills the entire
+          process (disconnects all clients temporarily).
         </p>
       </section>
 

@@ -113,6 +113,19 @@ export async function restartGateway(): Promise<RestartGatewayResponse> {
   });
 }
 
+export interface AbortAgentResponse {
+  success: boolean;
+  message?: string;
+  data?: unknown;
+  error?: string;
+}
+
+export async function abortAgent(): Promise<AbortAgentResponse> {
+  return apiRequest<AbortAgentResponse>('/agent/abort', {
+    method: 'POST',
+  });
+}
+
 export interface StorageStatusResponse {
   configured: boolean;
   missing?: string[];

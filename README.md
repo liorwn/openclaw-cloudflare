@@ -334,10 +334,35 @@ When the container sleeps, the next request will trigger a cold start. If you ha
 
 Access the admin UI at `/_admin/` to:
 - **R2 Storage Status** - Shows if R2 is configured, last backup time, and a "Backup Now" button
-- **Restart Gateway** - Kill and restart the OpenClaw gateway process
+- **Abort Agent** - Stop a running/stuck agent without restarting the gateway (soft stop)
+- **Restart Gateway** - Kill and restart the entire OpenClaw gateway process (nuclear option)
 - **Device Pairing** - View pending requests, approve devices individually or all at once, view paired devices
 
 The admin UI requires Cloudflare Access authentication (or `DEV_MODE=true` for local development).
+
+## Debug Endpoints
+
+### API Endpoints
+
+The admin API is available at `/api/admin/*` (requires Cloudflare Access):
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/api/admin/devices` | GET | List pending and paired devices |
+| `/api/admin/devices/:requestId/approve` | POST | Approve a pending device |
+| `/api/admin/devices/approve-all` | POST | Approve all pending devices |
+| `/api/admin/storage` | GET | R2 storage status and last sync time |
+| `/api/admin/storage/sync` | POST | Trigger manual R2 backup |
+| `/api/admin/agent/abort` | POST | Abort running agent(s) via WebSocket `chat.abort` — stops the agent without restarting the gateway |
+| `/api/admin/gateway/restart` | POST | Kill and restart the gateway process |
+
+Public endpoints (no auth required):
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/sandbox-health` | GET | Worker health check |
+| `/api/status` | GET | Gateway status (`running`, `not_running`, `not_responding`) |
+| `/api/start` | POST | Trigger blocking gateway startup |
 
 ## Debug Endpoints
 
@@ -589,6 +614,8 @@ OpenClaw in Cloudflare Sandbox uses multiple authentication layers:
 **Access denied on admin routes:** Ensure `CF_ACCESS_TEAM_DOMAIN` and `CF_ACCESS_AUD` are set, and that your Cloudflare Access application is configured correctly.
 
 **Browser automation returns "Access denied":** You need to create a Cloudflare Access bypass for the `/cdp` path. See [Cloudflare Access CDP Bypass](#cloudflare-access-cdp-bypass).
+
+**Agent is stuck/looping:** Use "Abort Agent" in the admin UI (or `POST /api/admin/agent/abort`) to stop the running agent. This is a soft stop — the gateway stays up and clients stay connected. Only use "Restart Gateway" if abort doesn't work.
 
 **Devices not appearing in admin UI:** Device list commands take 10-15 seconds due to WebSocket connection overhead. Wait and refresh.
 
